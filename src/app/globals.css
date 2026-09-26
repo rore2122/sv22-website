@@ -124,6 +124,73 @@ button {
   }
 }
 
+/* Legal page typography (Privacy Policy / Terms & Conditions) */
+.prose-legal h2 {
+  font-family:
+    "Bodoni 72",
+    "Didot",
+    "Bodoni MT",
+    Georgia,
+    serif;
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+  margin-top: 3rem;
+  margin-bottom: 1rem;
+}
+
+.prose-legal h2:first-child {
+  margin-top: 0;
+}
+
+.prose-legal p {
+  font-size: 14px;
+  line-height: 1.9;
+  color: rgba(255, 255, 255, 0.48);
+  margin-bottom: 1.1rem;
+}
+
+.prose-legal ul {
+  margin: 0 0 1.4rem 0;
+  padding-left: 1.15rem;
+  list-style: none;
+}
+
+.prose-legal li {
+  position: relative;
+  font-size: 14px;
+  line-height: 1.85;
+  color: rgba(255, 255, 255, 0.48);
+  margin-bottom: 0.6rem;
+  padding-left: 0.9rem;
+}
+
+.prose-legal li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.75em;
+  height: 3px;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.prose-legal strong {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+}
+
+.prose-legal a {
+  color: rgba(255, 255, 255, 0.85);
+  text-underline-offset: 3px;
+}
+
+.prose-legal a:hover {
+  color: #ffffff;
+}
+
 /* Small-screen refinement */
 @media (max-width: 640px) {
   .sv-input {

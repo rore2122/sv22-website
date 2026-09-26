@@ -19,12 +19,8 @@ import {
   X,
 } from "lucide-react";
 import Lenis from "lenis";
-
-const INSTAGRAM_URL = "https://www.instagram.com/street_.videographer_22/";
-
-// TODO: put your real WhatsApp number here — country code + number, no
-// spaces, dashes, or "+". Example for India: "919347395265"
-const WHATSAPP_NUMBER = "919347395265";
+import { Footer } from "@/components/layout/Footer";
+import { INSTAGRAM_URL, WHATSAPP_NUMBER } from "@/lib/site-config";
 
 function Instagram({
   size = 24,
@@ -69,6 +65,31 @@ function Instagram({
 /* =========================================================
    PREMIUM KIT: preloader, progress, cursor, magnetic, tilt
 ========================================================= */
+
+// Pauses a <video> when it scrolls out of view and resumes it when it
+// scrolls back in. Without this, every autoplay video on the page keeps
+// decoding forever — even ones nowhere near the viewport — which is the
+// single biggest cause of scroll lag on mobile GPUs.
+function useVisibleVideo(rootMargin = "150px") {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {});
+        } else {
+          el.pause();
+        }
+      },
+      { rootMargin, threshold: 0.01 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [rootMargin]);
+  return ref;
+}
 
 function Preloader() {
   const [done, setDone] = useState(false);
@@ -128,6 +149,9 @@ function CustomCursor() {
 
   useEffect(() => {
     if (!window.matchMedia("(pointer: fine)").matches) return;
+    // Intentional: pointer capability can only be detected on the client,
+    // so this synchronizes React state with a browser API on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnabled(true);
     const move = (e: globalThis.PointerEvent) => {
       x.set(e.clientX);
@@ -178,34 +202,57 @@ function Magnetic({ children }: { children: ReactNode }) {
   );
 }
 
-// 3D tilt: follows the mouse on laptops and the finger on phones.
-function Tilt({ children, className }: { children: ReactNode; className?: string }) {
-  const mx = useMotionValue(0);
-  const my = useMotionValue(0);
-  const rotateX = useSpring(useTransform(my, [-0.5, 0.5], [7, -7]), { stiffness: 120, damping: 14 });
-  const rotateY = useSpring(useTransform(mx, [-0.5, 0.5], [-9, 9]), { stiffness: 120, damping: 14 });
+/* =========================================================
+   WHATSAPP FLOATING CTA
+========================================================= */
+
+function WhatsAppIcon({ size = 20 }: { size?: number }) {
   return (
-    <motion.div
-      className={className}
-      style={{ rotateX, rotateY, transformPerspective: 1000 }}
-      onPointerMove={(e) => {
-        const r = e.currentTarget.getBoundingClientRect();
-        mx.set((e.clientX - r.left) / r.width - 0.5);
-        my.set((e.clientY - r.top) / r.height - 0.5);
-      }}
-      onPointerLeave={() => {
-        mx.set(0);
-        my.set(0);
-      }}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
     >
-      {children}
-    </motion.div>
+      <path d="M17.47 14.38c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.48-1.76-1.66-2.06-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.91-2.2-.24-.57-.49-.5-.67-.5-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.27.3-1.04 1.01-1.04 2.47s1.06 2.87 1.21 3.07c.15.2 2.08 3.16 5.03 4.43.7.3 1.25.48 1.68.62.7.22 1.34.19 1.84.12.56-.08 1.77-.72 2.02-1.42.25-.7.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35z" />
+      <path d="M12.02 2C6.5 2 2.02 6.48 2.02 12c0 1.87.5 3.63 1.44 5.15L2 22l4.98-1.4a9.96 9.96 0 0 0 5.04 1.37h.01c5.52 0 10-4.48 10-10S17.55 2 12.02 2zm0 18.13a8.1 8.1 0 0 1-4.15-1.14l-.3-.18-2.96.83.82-2.9-.19-.3A8.1 8.1 0 0 1 3.9 12c0-4.48 3.65-8.13 8.13-8.13S20.15 7.52 20.15 12s-3.65 8.13-8.13 8.13z" />
+    </svg>
   );
 }
 
-/* =========================================================
-   BOOKING MODAL
-========================================================= */
+// A quick, always-available contact option separate from the full
+// booking form — opens WhatsApp directly with a short pre-filled
+// greeting. No credentials or tokens involved: wa.me links only need
+// the public business number, which is safe to ship client-side.
+function WhatsAppFab() {
+  const message = encodeURIComponent(
+    "Hi SV22 👋 I'd like to know more about your cinematic reels."
+  );
+  const href = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${message}`;
+
+  return (
+    <motion.a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Message SV22 on WhatsApp"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1.6, duration: 0.6 }}
+      whileHover={{ scale: 1.06 }}
+      whileTap={{ scale: 0.94 }}
+      className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full border border-white/15 bg-white text-black shadow-[0_10px_30px_rgba(0,0,0,0.45)] backdrop-blur-md sm:bottom-7 sm:right-7"
+      style={{
+        marginBottom: "env(safe-area-inset-bottom)",
+        marginRight: "env(safe-area-inset-right)",
+      }}
+    >
+      <WhatsAppIcon size={22} />
+    </motion.a>
+  );
+}
 
 /* =========================================================
    BOOKING MODAL
@@ -220,56 +267,81 @@ function BookingModal({
 }) {
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Guards against a double-tap / double-click opening two WhatsApp
+  // windows and sending the request twice.
+  const submitLockRef = useRef(false);
 
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSending(true);
+
+    if (submitLockRef.current) return;
 
     const formData = new FormData(e.currentTarget);
-    const name = String(formData.get("name") ?? "");
-    const phone = String(formData.get("phone") ?? "");
-    const date = String(formData.get("date") ?? "");
-    const address = String(formData.get("address") ?? "");
-    const requirements = String(formData.get("requirements") ?? "");
+    const name = String(formData.get("name") ?? "").trim();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const date = String(formData.get("date") ?? "").trim();
+    const address = String(formData.get("address") ?? "").trim();
+    const requirements = String(formData.get("requirements") ?? "").trim();
 
-   const wave = String.fromCodePoint(0x1f44b);
-const user = String.fromCodePoint(0x1f464);
-const phoneIcon = String.fromCodePoint(0x1f4de);
-const calendar = String.fromCodePoint(0x1f4c5);
-const location = String.fromCodePoint(0x1f4cd);
-const note = String.fromCodePoint(0x1f4dd);
-const camera = String.fromCodePoint(0x1f4f1);
-const cinema = String.fromCodePoint(0x1f3ac);
+    if (!name || !phone || !date || !address || !requirements) {
+      setError("Please fill in every field before booking your service call.");
+      return;
+    }
 
-const text =
-  `*SV22 — SERVICE CALL REQUEST* 🎬\n` +
-  `━━━━━━━━━━━━━━━━━━━━\n\n` +
-  `Hi SV22 👋\n\n` +
-  `I'd like to book a cinematic service with SV22.\n\n` +
-  `*CLIENT DETAILS*\n` +
-  `👤 *Name:* ${name}\n` +
-  `📞 *Phone:* ${phone}\n` +
-  `📅 *Preferred Date:* ${date}\n` +
-  `📍 *Event Address:* ${address}\n\n` +
-  `*REQUIREMENTS*\n` +
-  `📝 ${requirements}\n\n` +
-  `━━━━━━━━━━━━━━━━━━━━\n` +
-  `*SV22 / CINEMATIC FILMS*\n` +
-  `Shot entirely on iPhone 📱`;
+    // Loose sanity check: a real phone number has at least 8 digits.
+    // We don't hard-restrict formatting since clients may enter
+    // country codes, spaces or dashes.
+    const digitCount = phone.replace(/\D/g, "").length;
+    if (digitCount < 8) {
+      setError("Please enter a valid phone number.");
+      return;
+    }
 
-const encoded = encodeURIComponent(text);
+    submitLockRef.current = true;
+    setError(null);
+    setSending(true);
 
-const url =
-  `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encoded}`;
+    const text =
+      `*SV22 — SERVICE CALL REQUEST* 🎬\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `Hi SV22 👋\n\n` +
+      `I'd like to book a cinematic service with SV22.\n\n` +
+      `*CLIENT DETAILS*\n` +
+      `👤 *Name:* ${name}\n` +
+      `📞 *Phone:* ${phone}\n` +
+      `📅 *Preferred Date:* ${date}\n` +
+      `📍 *Event Address:* ${address}\n\n` +
+      `*REQUIREMENTS*\n` +
+      `📝 ${requirements}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `*SV22 / CINEMATIC FILMS*\n` +
+      `Shot entirely on iPhone 📱`;
 
-window.open(url, "_blank", "noopener,noreferrer");
-window.open(url, "_blank");
-    setSending(false);
-    setSubmitted(true);
+    const encoded = encodeURIComponent(text);
+    const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encoded}`;
+
+    try {
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        // Popup blocked by the browser — fall back to navigating the
+        // current tab so the request is never silently lost.
+        window.location.href = url;
+      }
+      setSubmitted(true);
+    } catch {
+      setError(
+        "We couldn't open WhatsApp automatically. Please message SV22 directly on Instagram instead."
+      );
+    } finally {
+      setSending(false);
+      submitLockRef.current = false;
+    }
   }
 
   function closeModal() {
     setSubmitted(false);
+    setError(null);
     onClose();
   }
 
@@ -297,10 +369,24 @@ window.open(url, "_blank");
     };
   }, [open]);
 
+  // Close on Escape for keyboard users.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeModal();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="booking-modal-title"
           className="fixed inset-0 z-[100] overflow-y-auto bg-black/90 backdrop-blur-xl"
           style={{
             paddingTop: "env(safe-area-inset-top)",
@@ -385,6 +471,7 @@ className="relative mx-auto flex min-h-0 w-full max-w-[1500px] flex-col bg-[#050
                     </motion.p>
 
                     <motion.h2
+                      id="booking-modal-title"
                       initial={{ opacity: 0, y: 35 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
@@ -477,6 +564,8 @@ className="mt-5 max-w-[390px] text-sm leading-6 text-white/40 sm:mt-10 sm:text-[
                         inputMode="tel"
                         autoComplete="tel"
                         minLength={8}
+                        pattern="[0-9+\-\s()]{8,}"
+                        title="Enter a valid phone number (digits, spaces, + and - are okay)"
                         placeholder="Your phone number"
                         className="w-full border-b border-white/[0.14] bg-transparent px-0 py-3 text-[15px] text-white outline-none placeholder:text-white/20 transition-colors duration-300 focus:border-white/60 sm:py-4"
                       />
@@ -578,6 +667,21 @@ className="group mt-6 flex h-14 w-full items-center justify-between bg-white px-
                         </span>
                       </motion.button>
                     </motion.div>
+
+                    <div role="status" aria-live="polite" className="sr-only">
+                      {sending ? "Opening WhatsApp" : ""}
+                    </div>
+
+                    {error && (
+                      <motion.p
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        role="alert"
+                        className="mt-4 text-[10px] uppercase tracking-[0.15em] text-red-400"
+                      >
+                        {error}
+                      </motion.p>
+                    )}
 
                     <motion.p
                       initial={{ opacity: 0 }}
@@ -740,6 +844,9 @@ function Navbar({
             <img
               src="/images/logo/sv22-logo.png"
               alt="SV22"
+              width={40}
+              height={40}
+              decoding="async"
               className="h-10 w-10 rounded-full object-cover"
             />
 
@@ -769,6 +876,13 @@ function Navbar({
               className="text-[9px] font-semibold uppercase tracking-[0.25em] text-white/50 transition hover:text-white"
             >
               About
+            </button>
+
+            <button
+              onClick={() => scrollTo("faq")}
+              className="text-[9px] font-semibold uppercase tracking-[0.25em] text-white/50 transition hover:text-white"
+            >
+              FAQ
             </button>
 
             <a
@@ -822,6 +936,7 @@ function Navbar({
               <img
                 src="/images/logo/sv22-logo.png"
                 alt="SV22"
+                decoding="async"
                 className="h-9 w-auto"
               />
 
@@ -840,6 +955,7 @@ function Navbar({
                 ["work", "Work"],
                 ["services", "Experience"],
                 ["about", "About"],
+                ["faq", "FAQ"],
               ].map(([id, label], index) => (
                 <motion.button
                   key={id}
@@ -937,7 +1053,6 @@ function Hero({
     if (prefersReducedMotion || event.pointerType !== "mouse") return;
     const rect = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
     pointerX.set(x);
   };
 
@@ -1010,6 +1125,7 @@ function Hero({
         }}
       >
         <video
+          ref={useVisibleVideo()}
           className="absolute inset-0 h-full w-full object-cover object-center brightness-[1.12] contrast-[1.05]"
           autoPlay
           muted
@@ -1260,17 +1376,23 @@ function IphoneSection() {
       ref={ref}
       className="relative flex min-h-[84dvh] items-end overflow-hidden bg-black sm:min-h-[92dvh] lg:min-h-[100dvh]"
     >
-      {/* SOFT FULL-SCREEN BACKGROUND — keeps the mobile composition cinematic */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-black">
+      {/* SOFT FULL-SCREEN BACKGROUND — only on sm+. On mobile the main video
+          below switches to object-cover and fills the screen on its own, so
+          this second blurred copy (previously *more* blurred on mobile than
+          desktop — the wrong way round) doesn't need to exist there at all.
+          Blurring a live-playing video is one of the heaviest things a phone
+          GPU can be asked to do continuously; dropping the duplicate on
+          mobile removes both an extra video decode and that blur cost. */}
+      <div className="pointer-events-none absolute inset-0 hidden overflow-hidden bg-black sm:block">
         <video
+          ref={useVisibleVideo()}
           src="/videos/sv22-signature.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="none"
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-center opacity-55 blur-[18px] scale-[1.08] sm:blur-[8px] sm:opacity-35"
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-35 blur-[8px] scale-[1.08]"
         />
       </div>
 
@@ -1279,17 +1401,15 @@ function IphoneSection() {
         className="absolute inset-0 flex items-center justify-center"
         style={{ y: videoY, scale: videoScale }}
       >
-        {/* Single video element: object-fit switches responsively instead of
-            loading the same source twice for mobile and desktop. */}
         <video
+          ref={useVisibleVideo()}
           src="/videos/sv22-signature.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
-          className="h-full w-full object-contain sm:object-cover sm:object-center"
+          className="h-full w-full object-cover object-center sm:object-contain"
         />
       </motion.div>
 
@@ -1347,188 +1467,6 @@ function IphoneSection() {
    WORK / MOMENTS SECTION
 ========================================================= */
 
-function CinematicFilm({
-  project,
-  index,
-}: {
-  project: {
-    number: string;
-    title: string;
-    subtitle: string;
-    video: string;
-    orientation: "portrait" | "landscape";
-  };
-  index: number;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const prefersReducedMotion = useReducedMotion();
-  const [isCompact, setIsCompact] = useState(false);
-
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 640px)");
-    const update = () => setIsCompact(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"],
-  });
-
-  // Lighter parallax travel on small screens keeps scrolling feeling
-  // smooth rather than heavy on mobile GPUs, and disables entirely
-  // when the user prefers reduced motion.
-  const yRange = prefersReducedMotion ? 0 : isCompact ? 26 : 55;
-
-  const videoY = useTransform(scrollYProgress, [0, 1], [yRange, -yRange]);
-  const videoScale = useTransform(
-    scrollYProgress,
-    [0, 0.18, 0.5, 0.82, 1],
-    prefersReducedMotion
-      ? [1, 1, 1, 1, 1]
-      : [0.94, 0.985, 1, 0.985, 0.94],
-  );
-  const opacity = useTransform(
-    scrollYProgress,
-    [0, 0.12, 0.25, 0.78, 0.92],
-    [0, 0.7, 1, 1, 0],
-  );
-
-  const titleY = useTransform(
-    scrollYProgress,
-    [0.16, 0.38, 0.72, 0.9],
-    [35, 0, 0, -25],
-  );
-
-  const titleOpacity = useTransform(
-    scrollYProgress,
-    [0.16, 0.3, 0.76, 0.9],
-    [0, 1, 1, 0],
-  );
-
-  const progress = useTransform(
-    scrollYProgress,
-    [0.1, 0.9],
-    ["0%", "100%"],
-  );
-
-  const portrait = project.orientation === "portrait";
-
-  return (
-    <div
-      ref={ref}
-      className={`relative overflow-hidden px-5 sm:px-8 lg:px-10 ${
-        portrait
-          ? "flex min-h-[78vh] items-center py-10 sm:min-h-[88vh] sm:py-14 lg:min-h-[94vh] lg:py-20"
-          : "flex min-h-[60vh] items-start pt-16 pb-8 sm:min-h-[76vh] sm:items-center sm:py-14 lg:min-h-[94vh] lg:py-20"
-      }`}
-    >
-      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-center">
-        {/* subtle frame number */}
-        <div className="pointer-events-none absolute left-5 top-12 sm:left-8 lg:left-10">
-          <span className="font-display text-[clamp(2.5rem,10vw,4rem)] leading-none tracking-[-0.08em] text-white/[0.035] sm:text-[8vw] lg:text-[6vw]">
-            {project.number}
-          </span>
-        </div>
-
-        {/* VIDEO */}
-        <motion.div
-          style={{
-            y: videoY,
-            scale: videoScale,
-            opacity,
-          }}
-          className={`relative z-10 ${
-            portrait
-              ? "h-[62vh] max-h-[700px] w-[min(72vw,420px)] sm:h-[70vh] sm:max-h-[760px]"
-              : "w-full max-w-[1180px] aspect-[16/9]"
-          }`}
-        >
-          <div className="pointer-events-none absolute -inset-10 bg-white/[0.018] blur-[90px]" />
-
-          <Tilt className="relative h-full w-full overflow-hidden rounded-[16px] bg-[#050505] shadow-[0_45px_110px_rgba(0,0,0,0.7)] sm:rounded-[22px]">
-            <video
-              src={project.video}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="metadata"
-              className="h-full w-full object-cover"
-            />
-
-            {/* cinematic finish */}
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_48%,rgba(0,0,0,0.28)_100%)]" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[28%] bg-gradient-to-t from-black/45 to-transparent" />
-
-            {/* minimal frame corners */}
-            <span className="absolute left-4 top-4 h-5 w-5 border-l border-t border-white/30 sm:left-6 sm:top-6" />
-            <span className="absolute bottom-4 right-4 h-5 w-5 border-b border-r border-white/30 sm:bottom-6 sm:right-6" />
-          </Tilt>
-        </motion.div>
-
-        {/* TYPOGRAPHY */}
-        <motion.div
-          style={{
-            y: titleY,
-            opacity: titleOpacity,
-          }}
-          className={`absolute z-20 ${
-            portrait
-              ? index === 0
-                ? "bottom-[11%] left-[7%] lg:left-[11%]"
-                : "bottom-[11%] right-[7%] text-right lg:right-[11%]"
-              : "bottom-[12%] left-[7%] lg:left-[11%]"
-          }`}
-        >
-          <div
-            className={`mb-4 flex items-center gap-3 ${
-              index === 1 ? "justify-end" : ""
-            }`}
-          >
-            <span className="text-[8px] font-semibold uppercase tracking-[0.4em] text-white/35">
-              {project.number}
-            </span>
-            <span className="h-px w-8 bg-white/20" />
-            <span className="text-[8px] uppercase tracking-[0.4em] text-white/25">
-              SV22
-            </span>
-          </div>
-
-          <p className="mb-2 text-[8px] uppercase tracking-[0.4em] text-white/30">
-            {project.subtitle}
-          </p>
-
-          <h3
-            className={`font-display leading-[0.84] tracking-[-0.065em] text-white ${
-              portrait
-                ? "max-w-[330px] text-5xl sm:text-6xl lg:text-7xl"
-                : "max-w-[500px] text-5xl sm:text-6xl lg:text-8xl"
-            }`}
-          >
-            {project.title}
-          </h3>
-        </motion.div>
-
-        {/* MICRO LABEL */}
-        <div className="absolute bottom-8 right-5 hidden items-center gap-4 lg:flex">
-          <span className="text-[8px] uppercase tracking-[0.35em] text-white/20">
-            SHOT ON IPHONE
-          </span>
-          <div className="h-px w-16 bg-white/10">
-            <motion.div
-              style={{ width: progress }}
-              className="h-full bg-white/40"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function WorkSection() {
   const projects = [
     {
@@ -1557,13 +1495,30 @@ function WorkSection() {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeProject = projects[activeIndex];
 
+  // Track whether the carousel is actually on screen, so the rotation
+  // timer and the active video stop burning CPU/GPU once the user has
+  // scrolled past this section.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [sectionInView, setSectionInView] = useState(true);
   useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => setSectionInView(entry.isIntersecting),
+      { rootMargin: "150px", threshold: 0.01 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!sectionInView) return;
     const timer = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % projects.length);
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [projects.length]);
+  }, [projects.length, sectionInView]);
 
   const selectProject = (index: number) => {
     setActiveIndex(index);
@@ -1572,6 +1527,7 @@ function WorkSection() {
   return (
     <section
       id="work"
+      ref={sectionRef}
       className="relative overflow-hidden bg-black py-24 sm:py-32 lg:py-40"
     >
       {/* =====================================================
@@ -1625,7 +1581,7 @@ function WorkSection() {
                 <motion.video
                   key={`ambient-${project.number}`}
                   src={project.video}
-                  autoPlay={index === activeIndex}
+                  autoPlay={index === activeIndex && sectionInView}
                   muted
                   loop
                   playsInline
@@ -1663,7 +1619,7 @@ function WorkSection() {
                   <video
                     key={`${project.number}-${activeIndex}`}
                     src={project.video}
-                    autoPlay={index === activeIndex}
+                    autoPlay={index === activeIndex && sectionInView}
                     muted
                     loop
                     playsInline
@@ -1900,6 +1856,172 @@ function ServicesSection({
 }
 
 /* =========================================================
+   FAQ
+========================================================= */
+
+const FAQ_ITEMS: { q: string; a: string }[] = [
+  {
+    q: "What events does SV22 cover?",
+    a: "SV22 films life's moments that matter — celebrations, arrivals, milestones and everyday events — alongside cinematic automotive reels. Tell us what you're planning when you book and we'll let you know how we can help.",
+  },
+  {
+    q: "Do you shoot using an iPhone?",
+    a: "Yes — every SV22 film is shot entirely on iPhone. It's the core of the SV22 signature look.",
+  },
+  {
+    q: "How do I book SV22?",
+    a: "Tap \u201cStart Your Booking\u201d anywhere on the site to open the booking form. Submitting it opens a pre-filled WhatsApp message you send directly to SV22. You can also reach out via Instagram.",
+  },
+  {
+    q: "How far in advance should I book?",
+    a: "As early as possible once you have a date in mind — especially during busier periods — so we can confirm availability for your event.",
+  },
+  {
+    q: "When will I receive my reel?",
+    a: "Delivery timelines depend on the scope of the shoot and are confirmed with you directly after booking.",
+  },
+  {
+    q: "Can I request a specific editing style?",
+    a: "You're welcome to share references or preferences in the requirements field of the booking form. We'll do our best to accommodate them within the SV22 cinematic style.",
+  },
+  {
+    q: "Can I request a specific song or audio?",
+    a: "Yes, you can share a preference when you book. We'll confirm whether it's a good fit, taking platform and licensing considerations into account.",
+  },
+  {
+    q: "Do you cover locations outside the primary service area?",
+    a: "Let us know your event location in the booking form. We're happy to discuss travel for locations outside our primary service area.",
+  },
+  {
+    q: "Can I request revisions?",
+    a: "Yes — once you've received your reel, reach out via WhatsApp or Instagram and we'll discuss your revision request directly.",
+  },
+  {
+    q: "What happens if I need to reschedule my event?",
+    a: "Message SV22 as soon as possible via WhatsApp or Instagram and we'll do our best to find a new date, subject to availability.",
+  },
+  {
+    q: "How will SV22 contact me after submitting the booking form?",
+    a: "The booking form opens a pre-filled WhatsApp message for you to send. Once SV22 receives it, our team will reply to you directly on WhatsApp to confirm the details.",
+  },
+  {
+    q: "What information is required to make a booking?",
+    a: "Your name, phone number, preferred event date, event address, and a short note on your requirements — that's everything the booking form asks for.",
+  },
+];
+
+function FaqItem({
+  item,
+  index,
+  isOpen,
+  onToggle,
+}: {
+  item: { q: string; a: string };
+  index: number;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const panelId = `faq-panel-${index}`;
+  const buttonId = `faq-button-${index}`;
+
+  return (
+    <div className="border-b border-white/10">
+      <h3>
+        <button
+          id={buttonId}
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-controls={panelId}
+          className="flex w-full items-center justify-between gap-6 py-6 text-left transition-colors duration-300 hover:text-white sm:py-7"
+        >
+          <span
+            className={`font-display text-[clamp(1.15rem,3.2vw,1.7rem)] leading-tight tracking-[-0.02em] transition-colors duration-300 ${
+              isOpen ? "text-white" : "text-white/70"
+            }`}
+          >
+            {item.q}
+          </span>
+
+          <motion.span
+            animate={{ rotate: isOpen ? 45 : 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-white/15 text-white/60"
+            aria-hidden="true"
+          >
+            <span className="relative block h-3 w-3">
+              <span className="absolute left-0 top-1/2 h-px w-3 -translate-y-1/2 bg-current" />
+              <span className="absolute left-1/2 top-0 h-3 w-px -translate-x-1/2 bg-current" />
+            </span>
+          </motion.span>
+        </button>
+      </h3>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            id={panelId}
+            role="region"
+            aria-labelledby={buttonId}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <p className="max-w-2xl pb-7 text-sm leading-7 text-white/45 sm:pb-8 sm:text-[15px]">
+              {item.a}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function FaqSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(0);
+
+  return (
+    <section
+      id="faq"
+      className="relative overflow-hidden bg-black px-5 py-20 sm:px-8 sm:py-28 lg:px-10 lg:py-36"
+    >
+      <div className="mx-auto max-w-[1100px]">
+        <div className="mb-12 sm:mb-16 lg:mb-20">
+          <div className="mb-5 flex items-center gap-3 sm:mb-7">
+            <span className="h-px w-8 bg-white/35" />
+            <span className="text-[8px] font-semibold uppercase tracking-[0.42em] text-white/35 sm:text-[9px]">
+              SV22 / FAQ
+            </span>
+          </div>
+
+          <h2 className="font-display text-[clamp(2.6rem,10vw,4.5rem)] leading-[0.85] tracking-[-0.06em] text-white">
+            QUESTIONS,
+            <br />
+            <span className="text-white/25">ANSWERED.</span>
+          </h2>
+        </div>
+
+        <div className="border-t border-white/10">
+          {FAQ_ITEMS.map((item, index) => (
+            <FaqItem
+              key={item.q}
+              item={item}
+              index={index}
+              isOpen={openIndex === index}
+              onToggle={() =>
+                setOpenIndex((current) => (current === index ? null : index))
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* =========================================================
    FINAL CTA
 ========================================================= */
 
@@ -1914,12 +2036,12 @@ function FinalCTA({ onBook }: { onBook: () => void }) {
          ========================================================= */}
       <div className="absolute inset-0 -z-20 overflow-hidden bg-black">
         <video
+          ref={useVisibleVideo()}
           src="/videos/cta.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-center brightness-[1.12] contrast-[1.05]"
         />
@@ -1966,7 +2088,7 @@ function FinalCTA({ onBook }: { onBook: () => void }) {
           <span className="h-px w-8 bg-white/45 sm:w-12" />
 
           <p className="text-[9px] font-medium uppercase tracking-[0.28em] text-white/55 sm:text-[10px]">
-            SV22 / LET'S CREATE
+            SV22 / LET&apos;S CREATE
           </p>
         </motion.div>
 
@@ -2054,154 +2176,6 @@ function FinalCTA({ onBook }: { onBook: () => void }) {
   );
 }
 /* =========================================================
-   FOOTER
-========================================================= */
-
-function Footer() {
-  const footerLinks = [
-    ["WORK", "work"],
-    ["EXPERIENCE", "services"],
-    ["ABOUT", "about"],
-  ];
-
-  const scrollTo = (id: string) => {
-    const element = document.getElementById(id);
-    if (!element) return;
-
-    const top =
-      element.getBoundingClientRect().top + window.scrollY - 12;
-
-    window.scrollTo({
-      top,
-      behavior: "smooth",
-    });
-  };
-
-  return (
-    <footer className="relative overflow-hidden bg-black text-white">
-      {/* TOP CINEMATIC LINE */}
-      <div className="mx-auto max-w-[1600px] px-5 sm:px-8 lg:px-10">
-        <div className="border-t border-white/10" />
-
-        <div className="grid gap-14 py-16 sm:py-20 lg:grid-cols-[1.4fr_0.7fr_0.7fr] lg:gap-20 lg:py-24">
-          {/* BRAND */}
-          <div>
-            <div className="flex items-center gap-4">
-              <img
-                src="/images/logo/sv22-logo.png"
-                alt="SV22"
-                className="h-12 w-12 rounded-full object-cover"
-              />
-
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.35em]">
-                  SV22
-                </p>
-
-                <p className="mt-1 text-[8px] uppercase tracking-[0.28em] text-white/30">
-                  Cinematic Films
-                </p>
-              </div>
-            </div>
-
-            <p className="mt-10 max-w-md font-display text-[clamp(2.2rem,5vw,4.5rem)] leading-[0.88] tracking-[-0.06em]">
-              EVERY
-              <br />
-              <span className="text-white/25">MOMENT.</span>
-            </p>
-
-            <p className="mt-7 max-w-sm text-sm leading-7 text-white/40">
-              Cinematic films for the moments that matter, crafted entirely
-              on iPhone.
-            </p>
-          </div>
-
-          {/* EXPLORE */}
-          <div>
-            <p className="mb-7 text-[8px] font-semibold uppercase tracking-[0.35em] text-white/25">
-              EXPLORE
-            </p>
-
-            <div className="flex flex-col items-start gap-5">
-              {footerLinks.map(([label, id]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => scrollTo(id)}
-                  className="group flex items-center gap-3 text-[9px] font-semibold uppercase tracking-[0.25em] text-white/55 transition-colors duration-300 hover:text-white"
-                >
-                  <span>{label}</span>
-
-                  <span className="translate-x-0 opacity-0 transition-all duration-300 group-hover:translate-x-1 group-hover:opacity-100">
-                    ↗
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* CONNECT */}
-          <div>
-            <p className="mb-7 text-[8px] font-semibold uppercase tracking-[0.35em] text-white/25">
-              CONNECT
-            </p>
-
-            <a
-              href={INSTAGRAM_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="SV22 on Instagram"
-              className="group inline-flex items-center gap-3 text-[9px] font-semibold uppercase tracking-[0.25em] text-white/55 transition-colors duration-300 hover:text-white"
-            >
-              <Instagram
-                size={15}
-                strokeWidth={1.6}
-                className="transition-transform duration-300 group-hover:scale-110"
-              />
-
-              <span>Instagram</span>
-
-              <span className="transition-transform duration-300 group-hover:translate-x-1 group-hover:-translate-y-1">
-                ↗
-              </span>
-            </a>
-
-            <div className="mt-12">
-              <p className="text-[8px] uppercase tracking-[0.3em] text-white/20">
-                THE SV22 SIGNATURE
-              </p>
-
-              <p className="mt-3 text-[10px] uppercase tracking-[0.28em] text-white/45">
-                SHOT ENTIRELY ON IPHONE
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* BOTTOM BAR */}
-        <div className="flex flex-col gap-4 border-t border-white/10 py-7 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[8px] uppercase tracking-[0.3em] text-white/25">
-            © 2026 SV22
-          </p>
-
-          <div className="flex items-center gap-5">
-            <span className="h-px w-8 bg-white/15" />
-
-            <span className="text-[8px] uppercase tracking-[0.35em] text-white/25">
-              CINEMATIC FILMS / IPHONE
-            </span>
-          </div>
-
-          <p className="text-[8px] uppercase tracking-[0.3em] text-white/25">
-            MADE FOR THE MOMENT
-          </p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-/* =========================================================
    LENIS SMOOTH SCROLL
 ========================================================= */
 
@@ -2279,11 +2253,15 @@ export default function Home() {
         onBook={() => setBookingOpen(true)}
       />
 
+      <FaqSection />
+
       <FinalCTA
         onBook={() => setBookingOpen(true)}
       />
 
       <Footer />
+
+      <WhatsAppFab />
 
       <BookingModal
         open={bookingOpen}
