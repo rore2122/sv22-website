@@ -70,6 +70,31 @@ function Instagram({
    PREMIUM KIT: preloader, progress, cursor, magnetic, tilt
 ========================================================= */
 
+// Pauses a <video> when it scrolls out of view and resumes it when it
+// scrolls back in. Without this, every autoplay video on the page keeps
+// decoding forever — even ones nowhere near the viewport — which is the
+// single biggest cause of scroll lag on mobile GPUs.
+function useVisibleVideo(rootMargin = "150px") {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {});
+        } else {
+          el.pause();
+        }
+      },
+      { rootMargin, threshold: 0.01 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [rootMargin]);
+  return ref;
+}
+
 function Preloader() {
   const [done, setDone] = useState(false);
   useEffect(() => {
@@ -189,6 +214,11 @@ function Tilt({ children, className }: { children: ReactNode; className?: string
       className={className}
       style={{ rotateX, rotateY, transformPerspective: 1000 }}
       onPointerMove={(e) => {
+        // Only mouse gets the tilt. On touch, this fired on every finger
+        // move — including scroll gestures — and getBoundingClientRect()
+        // forces a synchronous layout read each time, which is a direct
+        // cause of scroll jank on mobile.
+        if (e.pointerType !== "mouse") return;
         const r = e.currentTarget.getBoundingClientRect();
         mx.set((e.clientX - r.left) / r.width - 0.5);
         my.set((e.clientY - r.top) / r.height - 0.5);
@@ -263,7 +293,6 @@ const url =
   `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encoded}`;
 
 window.open(url, "_blank", "noopener,noreferrer");
-window.open(url, "_blank");
     setSending(false);
     setSubmitted(true);
   }
@@ -1010,6 +1039,7 @@ function Hero({
         }}
       >
         <video
+          ref={useVisibleVideo()}
           className="absolute inset-0 h-full w-full object-cover object-center brightness-[1.12] contrast-[1.05]"
           autoPlay
           muted
@@ -1260,17 +1290,23 @@ function IphoneSection() {
       ref={ref}
       className="relative flex min-h-[84dvh] items-end overflow-hidden bg-black sm:min-h-[92dvh] lg:min-h-[100dvh]"
     >
-      {/* SOFT FULL-SCREEN BACKGROUND — keeps the mobile composition cinematic */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden bg-black">
+      {/* SOFT FULL-SCREEN BACKGROUND — only on sm+. On mobile the main video
+          below switches to object-cover and fills the screen on its own, so
+          this second blurred copy (previously *more* blurred on mobile than
+          desktop — the wrong way round) doesn't need to exist there at all.
+          Blurring a live-playing video is one of the heaviest things a phone
+          GPU can be asked to do continuously; dropping the duplicate on
+          mobile removes both an extra video decode and that blur cost. */}
+      <div className="pointer-events-none absolute inset-0 hidden overflow-hidden bg-black sm:block">
         <video
+          ref={useVisibleVideo()}
           src="/videos/sv22-signature.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="none"
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-center opacity-55 blur-[18px] scale-[1.08] sm:blur-[8px] sm:opacity-35"
+          className="absolute inset-0 h-full w-full object-cover object-center opacity-35 blur-[8px] scale-[1.08]"
         />
       </div>
 
@@ -1279,17 +1315,15 @@ function IphoneSection() {
         className="absolute inset-0 flex items-center justify-center"
         style={{ y: videoY, scale: videoScale }}
       >
-        {/* Single video element: object-fit switches responsively instead of
-            loading the same source twice for mobile and desktop. */}
         <video
+          ref={useVisibleVideo()}
           src="/videos/sv22-signature.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
-          className="h-full w-full object-contain sm:object-cover sm:object-center"
+          className="h-full w-full object-cover object-center sm:object-contain"
         />
       </motion.div>
 
@@ -1557,13 +1591,30 @@ function WorkSection() {
   const [activeIndex, setActiveIndex] = useState(0);
   const activeProject = projects[activeIndex];
 
+  // Track whether the carousel is actually on screen, so the rotation
+  // timer and the active video stop burning CPU/GPU once the user has
+  // scrolled past this section.
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [sectionInView, setSectionInView] = useState(true);
   useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => setSectionInView(entry.isIntersecting),
+      { rootMargin: "150px", threshold: 0.01 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!sectionInView) return;
     const timer = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % projects.length);
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [projects.length]);
+  }, [projects.length, sectionInView]);
 
   const selectProject = (index: number) => {
     setActiveIndex(index);
@@ -1572,6 +1623,7 @@ function WorkSection() {
   return (
     <section
       id="work"
+      ref={sectionRef}
       className="relative overflow-hidden bg-black py-24 sm:py-32 lg:py-40"
     >
       {/* =====================================================
@@ -1625,7 +1677,7 @@ function WorkSection() {
                 <motion.video
                   key={`ambient-${project.number}`}
                   src={project.video}
-                  autoPlay={index === activeIndex}
+                  autoPlay={index === activeIndex && sectionInView}
                   muted
                   loop
                   playsInline
@@ -1663,7 +1715,7 @@ function WorkSection() {
                   <video
                     key={`${project.number}-${activeIndex}`}
                     src={project.video}
-                    autoPlay={index === activeIndex}
+                    autoPlay={index === activeIndex && sectionInView}
                     muted
                     loop
                     playsInline
@@ -1914,12 +1966,12 @@ function FinalCTA({ onBook }: { onBook: () => void }) {
          ========================================================= */}
       <div className="absolute inset-0 -z-20 overflow-hidden bg-black">
         <video
+          ref={useVisibleVideo()}
           src="/videos/cta.mp4"
-          autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-center brightness-[1.12] contrast-[1.05]"
         />
